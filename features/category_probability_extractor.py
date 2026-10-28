@@ -58,11 +58,12 @@ class CategoryProbabilityExtractor:
 
         print(classification_report(y_true, y_pred))
 
-    def predict(self, dataset: pd.DataFrame) -> np.ndarray:
+    def transform(self, dataset: pd.DataFrame) -> pd.DataFrame:
         dataset = dataset.copy()
         self.__create_text_column(dataset)
 
-        probs = np.zeros(len(dataset))
+        dataset['declared_cat_prob'] = -1.0
+        dataset['predicted_category'] = None
 
         model_to_indices = {i: [] for i in range(self.n_splits)}
         test_indices = []
@@ -87,25 +88,41 @@ class CategoryProbabilityExtractor:
             classes = list(model.classes_)
 
             for local_i, global_i in enumerate(indices):
+                dataset.iat[global_i, dataset.columns.get_loc('predicted_category')] = classes[np.argmax(preds_proba[local_i])]
+
                 cat = sub.iloc[local_i]['declared_category']
                 if pd.notna(cat) and cat in classes:
-                    probs[global_i] = preds_proba[local_i, classes.index(cat)]
+                    dataset.iat[global_i, dataset.columns.get_loc('declared_cat_prob')] = preds_proba[local_i, classes.index(cat)]
 
         if test_indices:
             sub = dataset.iloc[test_indices]
-            test_preds = []
+            reference_classes = list(self.models[0].classes_)
 
+            preds_list = []
             for vec, model in zip(self.vectorizers, self.models):
                 X_vec = vec.transform(sub['text'])
                 preds_proba = model.predict_proba(X_vec)
+
                 classes = list(model.classes_)
+                aligned_proba = np.zeros((len(sub), len(reference_classes)))
 
-                fold_probs = [
-                    preds_proba[local_i, classes.index(cat)] if pd.notna(cat) and cat in classes else 0.0
-                    for local_i, cat in enumerate(sub['declared_category'])
-                ]
-                test_preds.append(fold_probs)
+                for c_idx, c in enumerate(reference_classes):
+                    if c in classes:
+                        aligned_proba[:, c_idx] = preds_proba[:, classes.index(c)]
 
-            probs[test_indices] = np.mean(test_preds, axis=0)
+                preds_list.append(aligned_proba)
 
-        return probs
+            avg_preds_proba = np.mean(preds_list, axis=0)
+            best_cat = np.array(reference_classes)[np.argmax(avg_preds_proba, axis=1)]
+
+            for local_i, global_i in enumerate(test_indices):
+                dataset.iat[global_i, dataset.columns.get_loc('predicted_category')] = best_cat[local_i]
+
+                cat = sub.iloc[local_i]['declared_category']
+                if pd.notna(cat) and cat in reference_classes:
+                    dataset.iat[global_i, dataset.columns.get_loc('declared_cat_prob')] = avg_preds_proba[
+                        local_i, reference_classes.index(cat)]
+
+        dataset = dataset.drop(columns=['text'])
+
+        return dataset
