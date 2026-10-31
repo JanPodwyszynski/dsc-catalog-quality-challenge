@@ -5,6 +5,7 @@ from sklearn.metrics import classification_report
 from sklearn.model_selection import GroupKFold
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.base import clone
+from .seller_folds import seller_folds
 
 class PackSizeProbabilityExtractor:
     def __init__(self, base_model, n_splits=5):
@@ -26,14 +27,12 @@ class PackSizeProbabilityExtractor:
         dataset['text'] = dataset['title'].fillna('').str.lower() + ' ' + desc_clean.str.lower()
 
     def fit(self, dataset: pd.DataFrame):
-        gkf = GroupKFold(n_splits=self.n_splits)
-
         dataset = dataset.copy()
         self.__create_text_column(dataset)
 
         y_true, y_pred = [], []
 
-        for fold_idx, (train_idx, val_idx) in enumerate(gkf.split(dataset, groups=dataset['seller_id'])):
+        for fold_idx, (train_idx, val_idx) in enumerate(seller_folds(dataset['seller_id'], self.n_splits)):
 
             val_sellers = dataset.iloc[val_idx]['seller_id'].unique()
             for seller in val_sellers:
