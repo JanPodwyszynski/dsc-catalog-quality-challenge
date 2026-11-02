@@ -4,7 +4,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.base import clone
 from features.data_preprocessor import DataPreprocessor
 from .seller_folds import seller_folds
-
+import copy
 
 class CrossValidationEnsemble:
     def __init__(self, base_model, preprocessor: DataPreprocessor, features, n_splits=5):
@@ -26,7 +26,7 @@ class CrossValidationEnsemble:
             df_fit = train_df.iloc[fit_idx].copy()
             df_val = train_df.iloc[val_idx].copy()
 
-            dp = clone(self.base_preprocessor)
+            dp = copy.deepcopy(self.base_preprocessor)
             df_fit = dp.fit_transform(df_fit)
             df_val = dp.transform(df_val)
 
@@ -35,7 +35,7 @@ class CrossValidationEnsemble:
             X_val = df_val[self.features]
             y_val = df_val['target']
 
-            clf = clone(self.base_model)
+            clf = self.base_model.__class__(**self.base_model.get_params())
             clf.fit(X_fit, y_fit)
 
             val_probs = clf.predict_proba(X_val)[:, 1]

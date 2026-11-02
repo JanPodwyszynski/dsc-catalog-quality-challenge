@@ -37,9 +37,13 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
         effective_pack = x['predicted_pack_size'].fillna(x['pack_size']).fillna(1.0)
         effective_pack = effective_pack.clip(lower=1.0)
 
+        x['title'] = x['title'].fillna('missing').astype(str)
+        x['description'] = x['description'].fillna('missing').astype(str)
+
         # Ceny i wagi jednostkowe
         x['unit_price'] = x['price_pln'] / effective_pack
         x['unit_weight'] = x['shipping_weight_kg'] / effective_pack
+        x['price_per_weight'] = x['unit_price'] / x['unit_weight']
 
         x['log_unit_price'] = np.log1p(x['unit_price'].clip(lower=0))
         x['log_unit_weight'] = np.log1p(x['unit_weight'].clip(lower=0))
